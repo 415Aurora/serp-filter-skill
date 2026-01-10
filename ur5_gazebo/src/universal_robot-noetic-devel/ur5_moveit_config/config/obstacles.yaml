@@ -1,0 +1,10 @@
+collision_objects:
+  - id: "ground_box"
+    header_frame_id: "base_link"  # 坐标系
+    primitives:
+      - type: 1                     # 1 = BOX
+        dimensions: [1.0, 1.0, 0.1]  # 长, 宽, 高
+    primitive_poses:
+      - position: {x: 0.0, y: 0.0, z: -0.05}
+        orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    operation: add

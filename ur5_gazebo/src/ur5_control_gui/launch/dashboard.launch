@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<launch>
+  <node name="ur5_control_gui" pkg="ur5_control_gui" type="ur5_control_node.py" output="screen">
+  </node>
+</launch>
