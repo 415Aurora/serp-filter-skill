@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 
 @dataclass(slots=True)
@@ -17,6 +18,12 @@ class SearchResult:
 
 
 @dataclass(slots=True)
+class SearchPage:
+    results: list[SearchResult]
+    next_start: int | None
+
+
+@dataclass(slots=True)
 class EnrichedResult(SearchResult):
     domain_created_at: str | None
     domain_created_source: str
@@ -29,9 +36,13 @@ class EnrichedResult(SearchResult):
 
 @dataclass(slots=True)
 class PipelineRunResult:
+    query: str
+    target_kept_count: int
     kept_results: list[EnrichedResult]
     excluded_results: list[EnrichedResult]
-    csv_path: str
-    xlsx_path: str
-    manifest_path: str
-
+    raw_fetched_count: int
+    pages_fetched: int
+    stop_reason: str
+    csv_path: Path
+    xlsx_path: Path
+    manifest_path: Path

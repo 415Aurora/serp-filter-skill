@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import requests
+
 from serp_filter.domain_dates import RdapDomainDateLookup
 
 
@@ -51,3 +53,16 @@ def test_rdap_lookup_returns_unknown_when_no_registration_event() -> None:
     assert created_at is None
     assert source == "rdap_missing"
 
+
+class _TimeoutSession:
+    def get(self, url: str, timeout: int) -> _FakeResponse:
+        raise requests.exceptions.ReadTimeout("timed out")
+
+
+def test_rdap_lookup_returns_error_status_on_timeout() -> None:
+    lookup = RdapDomainDateLookup(session=_TimeoutSession())
+
+    created_at, source = lookup("example.com")
+
+    assert created_at is None
+    assert source == "rdap_error"

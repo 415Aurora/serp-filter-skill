@@ -16,11 +16,13 @@ class RdapDomainDateLookup:
         if self.min_interval_seconds > 0:
             sleep(self.min_interval_seconds)
         client = self.session or requests.Session()
-        response = client.get(f"{self.base_url}/{domain}", timeout=30)
-        response.raise_for_status()
-        payload = response.json()
+        try:
+            response = client.get(f"{self.base_url}/{domain}", timeout=30)
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, ValueError):
+            return None, "rdap_error"
         for event in payload.get("events", []):
             if event.get("eventAction") == "registration" and event.get("eventDate"):
                 return str(event["eventDate"])[:10], "rdap"
         return None, "rdap_missing"
-

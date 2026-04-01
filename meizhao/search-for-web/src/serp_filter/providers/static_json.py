@@ -5,17 +5,24 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from serp_filter.domain_utils import normalize_root_domain
-from serp_filter.models import SearchResult
+from serp_filter.models import SearchPage, SearchResult
 
 
 @dataclass(slots=True)
 class StaticJsonProvider:
     data_path: Path
 
-    def search(self, query: str, limit: int, locale: str | None = None) -> list[SearchResult]:
+    def fetch_page(
+        self,
+        query: str,
+        page_size: int,
+        locale: str | None = None,
+        start: int = 0,
+    ) -> SearchPage:
         payload = json.loads(self.data_path.read_text(encoding="utf-8"))
         results: list[SearchResult] = []
-        for item in payload.get(query, [])[:limit]:
+        items = payload.get(query, [])
+        for item in items[start : start + page_size]:
             link = item.get("link", "")
             results.append(
                 SearchResult(
@@ -30,5 +37,5 @@ class StaticJsonProvider:
                     provider_raw_date=item.get("date"),
                 )
             )
-        return results
-
+        next_start = start + page_size if start + page_size < len(items) else None
+        return SearchPage(results=results, next_start=next_start)

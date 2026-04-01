@@ -27,8 +27,16 @@ FIELDNAMES = [
 
 
 def write_results(
+    query: str,
+    target_kept_count: int,
     kept_results: list[EnrichedResult],
     excluded_results: list[EnrichedResult],
+    raw_fetched_count: int,
+    pages_fetched: int,
+    page_size: int,
+    max_pages: int,
+    max_raw_results: int,
+    stop_reason: str,
     output_prefix: Path,
 ) -> tuple[Path, Path, Path]:
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
@@ -51,11 +59,18 @@ def write_results(
     workbook.save(xlsx_path)
 
     manifest = {
+        "query": query,
+        "target_kept_count": target_kept_count,
         "kept_count": len(kept_results),
         "excluded_count": len(excluded_results),
+        "raw_fetched_count": raw_fetched_count,
+        "pages_fetched": pages_fetched,
+        "page_size": page_size,
+        "max_pages": max_pages,
+        "max_raw_results": max_raw_results,
+        "stop_reason": stop_reason,
         "csv_path": str(csv_path),
         "xlsx_path": str(xlsx_path),
     }
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     return csv_path, xlsx_path, manifest_path
-

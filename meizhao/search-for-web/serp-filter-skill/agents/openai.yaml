@@ -1,0 +1,4 @@
+interface:
+  display_name: "Google SERP Filter"
+  short_description: "Fetch, filter, and clean Google result candidates"
+  default_prompt: "Use $serp-filter-google-results to fetch Google search results, exclude sites already present in my local list, and optionally run a second-pass cleaning step to produce reviewable candidate spreadsheets."

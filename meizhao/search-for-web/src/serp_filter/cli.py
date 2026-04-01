@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Sequence
 
 from serp_filter.blocklist import BlocklistSourceConfig, load_blocked_domains
+from serp_filter.cleaner import classify_rows, load_results_file, write_clean_results
 from serp_filter.domain_dates import RdapDomainDateLookup
 from serp_filter.pipeline import run_pipeline
 from serp_filter.providers.serpapi import SerpApiProvider
@@ -28,10 +29,17 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--provider-config", type=Path, help="TOML file storing provider credentials or paths.")
     run_parser.add_argument("--provider-data", type=Path, help="JSON payload for static-json provider.")
     run_parser.add_argument("--output-prefix", type=Path, required=True)
-    run_parser.add_argument("--limit", type=int, default=20)
+    run_parser.add_argument("--limit", type=int, default=20, help="Target number of kept results.")
+    run_parser.add_argument("--page-size", type=int, default=10, help="Raw results requested per provider page.")
+    run_parser.add_argument("--max-pages", type=int, default=10, help="Maximum provider pages to fetch per query.")
+    run_parser.add_argument("--max-raw-results", type=int, default=100, help="Hard cap on raw fetched results per query.")
     run_parser.add_argument("--locale", default="us")
     run_parser.add_argument("--domain-date-provider", choices=["rdap", "noop"], default="rdap")
     run_parser.add_argument("--domain-delay", type=float, default=0.0)
+
+    clean_parser = subparsers.add_parser("clean")
+    clean_parser.add_argument("--input-file", type=Path, required=True, help="First-pass CSV or XLSX result file.")
+    clean_parser.add_argument("--output-prefix", type=Path, required=True)
     return parser
 
 
@@ -39,6 +47,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "clean":
+        rows = load_results_file(args.input_file)
+        classified = classify_rows(rows)
+        write_clean_results(classified, args.output_prefix)
+        return 0
     if args.command != "run":
         parser.error("Unsupported command")
 
@@ -64,6 +77,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             domain_lookup=domain_lookup,
             output_prefix=output_prefix,
             limit=args.limit,
+            page_size=args.page_size,
+            max_pages=args.max_pages,
+            max_raw_results=args.max_raw_results,
             locale=args.locale,
         )
     return 0

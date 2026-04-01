@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
 from serp_filter.domain_utils import normalize_root_domain
-from serp_filter.models import SearchResult
+from serp_filter.models import SearchPage, SearchResult
 
 
 @dataclass(slots=True)
@@ -14,16 +15,23 @@ class SerpApiProvider:
     session: requests.Session | object | None = None
     base_url: str = "https://serpapi.com/search.json"
 
-    def search(self, query: str, limit: int, locale: str | None = None) -> list[SearchResult]:
+    def fetch_page(
+        self,
+        query: str,
+        page_size: int,
+        locale: str | None = None,
+        start: int = 0,
+    ) -> SearchPage:
         client = self.session or requests.Session()
         response = client.get(
             self.base_url,
             params={
                 "engine": "google",
                 "q": query,
-                "num": limit,
+                "num": page_size,
                 "api_key": self.api_key,
                 "gl": locale or "us",
+                "start": start,
             },
             timeout=30,
         )
@@ -45,5 +53,18 @@ class SerpApiProvider:
                     provider_raw_date=item.get("date"),
                 )
             )
-        return results
+        return SearchPage(results=results, next_start=_extract_next_start(payload))
 
+
+def _extract_next_start(payload: dict) -> int | None:
+    next_url = payload.get("serpapi_pagination", {}).get("next")
+    if not next_url:
+        return None
+    parsed = urlparse(next_url)
+    start_values = parse_qs(parsed.query).get("start", [])
+    if not start_values:
+        return None
+    try:
+        return int(start_values[0])
+    except ValueError:
+        return None
