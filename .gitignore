@@ -1,0 +1,9 @@
+.agent/
+.worktrees/
+.venv/
+**/__pycache__/
+**/.pytest_cache/
+meizhao/search-for-web/private/
+meizhao/search-for-web/output/
+meizhao/search-for-web/tmp/
+

@@ -1,0 +1,4 @@
+path = "private/blocklists/ai-tool-submit-260327.xlsx"
+sheet_name = "AI提交"
+url_columns = ["Submit Link"]
+
