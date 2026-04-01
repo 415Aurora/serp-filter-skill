@@ -1,0 +1,4 @@
+interface:
+  display_name: "Google SERP Filter"
+  short_description: "Filter Google results against local website lists"
+  default_prompt: "Use $serp-filter-google-results to fetch Google search results, exclude sites already present in my local list, and output the remaining sites to spreadsheet files."
