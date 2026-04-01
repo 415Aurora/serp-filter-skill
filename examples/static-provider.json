@@ -1,0 +1,30 @@
+{
+  "best ai directories": [
+    {
+      "position": 1,
+      "title": "Futurepedia",
+      "link": "https://www.futurepedia.io/",
+      "displayed_link": "www.futurepedia.io",
+      "source": "Futurepedia",
+      "snippet": "AI tools and directories."
+    },
+    {
+      "position": 2,
+      "title": "Example AI Site",
+      "link": "https://www.example.com/ai",
+      "displayed_link": "www.example.com",
+      "source": "Example",
+      "snippet": "Example directory result."
+    }
+  ],
+  "best startup directories": [
+    {
+      "position": 1,
+      "title": "BetaList",
+      "link": "https://betalist.com/",
+      "displayed_link": "betalist.com",
+      "source": "BetaList",
+      "snippet": "Discover tomorrow's startups."
+    }
+  ]
+}

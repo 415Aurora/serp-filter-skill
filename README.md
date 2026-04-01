@@ -1,13 +1,31 @@
 # serp-filter-skill
 
-`serp-filter-skill` is a small Python CLI for fetching Google SERP results, excluding domains already present in a local blocklist, enriching domains with registration dates, and exporting the filtered results to spreadsheet-friendly files.
+[![CI](https://github.com/415Aurora/serp-filter-skill/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/415Aurora/serp-filter-skill/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Python 3.11%2B](https://img.shields.io/badge/python-3.11%2B-blue.svg)](./pyproject.toml)
+[![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-black.svg)](./CHANGELOG.md)
 
-## Requirements
+`serp-filter-skill` is a Python CLI for collecting Google SERP results, removing domains that already exist in a local blocklist, enriching the remaining domains with registration dates, and exporting clean results to spreadsheet-friendly output files.
 
-- Python 3.11+
-- Optional: a SerpApi key for live Google queries
+It is designed for workflows where you need to:
 
-## Install
+- search for candidate websites from one or more Google queries
+- exclude sites you already have in a spreadsheet or domain list
+- deduplicate by registrable domain
+- export filtered prospects as `.csv`, `.xlsx`, and `.manifest.json`
+
+## Features
+
+- Single-query or batch-query input
+- Spreadsheet-aware blocklist loading
+- Domain normalization and deduplication
+- Optional RDAP lookup for domain registration dates
+- `serpapi` provider for live collection
+- `static-json` provider for local replay and testing
+
+## Quickstart
+
+### 1. Create a virtual environment
 
 ```bash
 python -m venv .venv
@@ -16,35 +34,18 @@ pip install -U pip
 pip install -e '.[dev]'
 ```
 
-## What It Does
-
-- Accepts a single query or a query file
-- Reads blocklisted domains from spreadsheet or text-like inputs
-- Deduplicates by registrable domain
-- Optionally enriches domains with registration dates via RDAP
-- Writes `.csv`, `.xlsx`, and `.manifest.json` outputs
-
-## Repository Layout
-
-- `src/serp_filter/`: CLI and pipeline implementation
-- `tests/`: pytest coverage
-- `config/`: example configuration files
-- `serp-filter-skill/`: Codex skill definition
-- `private/`: local-only provider keys and input files, ignored by git
-- `output/`: generated exports, ignored by git
-
-## Quick Start
-
-Create your local-only working directories and copy the example provider config:
+### 2. Prepare local-only working directories
 
 ```bash
-mkdir -p private output
+mkdir -p private/blocklists output
 cp config/providers.example.toml private/providers.toml
 ```
 
-### Live SerpApi Run
+`private/` and `output/` are intentionally ignored by git so you can keep API keys, input spreadsheets, and generated exports out of the repository.
 
-Put your key in `private/providers.toml`, then run:
+### 3. Run the CLI
+
+Live query run with SerpApi:
 
 ```bash
 PYTHONPATH=src python -m serp_filter run \
@@ -57,19 +58,27 @@ PYTHONPATH=src python -m serp_filter run \
   --domain-delay 1.0
 ```
 
-### Offline Replay
-
-Use the `static-json` provider for replay or local verification:
+Offline replay with local example files:
 
 ```bash
+mkdir -p output
 PYTHONPATH=src python -m serp_filter run \
-  --query-file private/queries.txt \
-  --blocklist-file private/blocklists/sites.xlsx \
+  --query-file examples/queries.txt \
+  --blocklist-file examples/blocklist-sites.csv \
   --provider static-json \
-  --provider-config private/providers.toml \
-  --output-prefix output/google-serp-replay \
+  --provider-config examples/providers.static-json.toml \
+  --output-prefix output/example-run \
   --domain-date-provider noop
 ```
+
+## Example Files
+
+The [`examples/`](./examples) directory contains small public inputs you can inspect and adapt:
+
+- [`examples/queries.txt`](./examples/queries.txt): sample search queries
+- [`examples/blocklist-sites.csv`](./examples/blocklist-sites.csv): sample domains to exclude
+- [`examples/static-provider.json`](./examples/static-provider.json): offline provider payload for replay
+- [`examples/providers.static-json.toml`](./examples/providers.static-json.toml): config pointing the CLI at the offline payload
 
 ## CLI Reference
 
@@ -82,20 +91,47 @@ Main flags:
 
 - `--query` or `--query-file`
 - `--blocklist-file`
+- `--sheet-name`
+- `--url-column`
+- `--domain-column`
 - `--provider {serpapi,static-json}`
 - `--provider-config`
+- `--provider-data`
 - `--output-prefix`
 - `--domain-date-provider {rdap,noop}`
 - `--domain-delay`
 
-## Test
+## Repository Layout
+
+- `src/serp_filter/`: implementation
+- `tests/`: pytest coverage
+- `config/`: example configuration templates
+- `examples/`: public sample inputs for docs and local replay
+- `serp-filter-skill/`: Codex skill definition
+
+## Development
+
+Run the test suite:
 
 ```bash
 PYTHONPATH=src python -m pytest -q
 ```
 
+The repository also includes GitHub Actions CI for pushes and pull requests to `main`.
+
+## Contributing
+
+Contribution guidelines live in [`CONTRIBUTING.md`](./CONTRIBUTING.md). The short version is:
+
+- keep changes focused
+- add or update tests when behavior changes
+- do not commit secrets, `private/`, or generated `output/` files
+
+## Changelog
+
+Release history lives in [`CHANGELOG.md`](./CHANGELOG.md).
+
 ## Notes
 
-- The recorded "creation date" is the domain registration date, not the site's real launch date.
-- `private/` and `output/` are intentionally excluded from version control.
-- The package exposes a console script named `serp-filter` after installation.
+- The recorded "creation date" is the domain registration date, not the site's true launch date.
+- The installed package exposes a console script named `serp-filter`.
