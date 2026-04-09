@@ -16,7 +16,7 @@
 - `src/serp_filter/`
   skill 背后的本地 Python 实现。
 - `config/`
-  示例配置。
+  示例配置（包含 `providers.example.toml`、`blocklist.example.toml`、`query-templates.txt`）。
 - `private/`
   私有输入和私有配置，不应该提交真实凭据。
 - `output/`
@@ -102,7 +102,23 @@ data_path = "private/provider-data/example-results.json"
 
 如果只做离线验证，可以只保留 `[static_json]`。
 
-### 3. Blocklist 文件
+### 3. Query 模板文件
+
+仓库内置了 `config/query-templates.txt`，用于 AI submit 场景的批量 query 模板。`run` 支持把模板文件和 `--query` / `--query-file` 合并后去重执行。
+
+示例：
+
+```bash
+cd meizhao/search-for-web
+PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
+  --query-template-file config/query-templates.txt \
+  --blocklist-file private/blocklists/ai-tool-submit-260327.xlsx \
+  --provider static-json \
+  --provider-config private/providers.toml \
+  --output-prefix output/google-serp-template-replay
+```
+
+### 4. Blocklist 文件
 
 示例参考：
 
@@ -129,6 +145,7 @@ url_columns = ["Submit Link"]
 cd meizhao/search-for-web
 PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
   --query-file private/queries.txt \
+  --query-template-file config/query-templates.txt \
   --blocklist-file private/blocklists/ai-tool-submit-260327.xlsx \
   --sheet-name "AI提交" \
   --url-column "Submit Link" \
@@ -165,6 +182,12 @@ PYTHONPATH=src ../../.venv/bin/python -m serp_filter clean \
   --output-prefix output/google-serp-run-cleaned
 ```
 
+`clean` 当前针对 AI submit 发现流程采用“strict keep + wide flag”策略：
+
+- `keep`：只保留高置信提交页（例如同时具备 submit + AI/directory 信号）。
+- `flag`：保留更宽口径的可疑候选，供人工复核。
+- `drop`：明显噪音（文档、论坛、视频、社交等）进入 review，不进入候选结果。
+
 第二轮输出：
 
 - `*.csv`
@@ -184,6 +207,7 @@ PYTHONPATH=src ../../.venv/bin/python -m serp_filter clean \
 cd meizhao/search-for-web
 PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
   --query-file private/queries.txt \
+  --query-template-file config/query-templates.txt \
   --blocklist-file private/blocklists/ai-tool-submit-260327.xlsx \
   --provider static-json \
   --provider-config private/providers.toml \
