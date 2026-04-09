@@ -183,3 +183,84 @@ def test_cli_clean_writes_candidate_results_and_review_outputs(tmp_path: Path) -
     assert manifest["decision_counts"]["keep"] == 1
     assert manifest["decision_counts"]["flag"] == 1
     assert manifest["decision_counts"]["drop"] == 1
+
+
+def test_cli_run_with_query_template_file_merges_queries(tmp_path: Path) -> None:
+    query_file = tmp_path / "queries.txt"
+    query_file.write_text("submit your AI tool\n", encoding="utf-8")
+
+    template_file = tmp_path / "templates.txt"
+    template_file.write_text("submit your AI tool\nadd your AI tool directory\n", encoding="utf-8")
+
+    provider_data = tmp_path / "provider.json"
+    provider_data.write_text(
+        json.dumps(
+            {
+                "submit your AI tool": [
+                    {
+                        "position": 1,
+                        "title": "Example Result",
+                        "link": "https://www.example.com/tools",
+                        "displayed_link": "www.example.com",
+                        "source": "Example",
+                        "snippet": "example",
+                    }
+                ],
+                "add your AI tool directory": [
+                    {
+                        "position": 1,
+                        "title": "Second Result",
+                        "link": "https://www.second.com/tools",
+                        "displayed_link": "www.second.com",
+                        "source": "Second",
+                        "snippet": "second",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    provider_config = tmp_path / "providers.toml"
+    provider_config.write_text(
+        "\n".join(
+            [
+                "[static_json]",
+                f"data_path = {json.dumps(str(provider_data))}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    blocklist = tmp_path / "blocklist.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Sites"
+    sheet.append(["name", "submit link"])
+    workbook.save(blocklist)
+
+    output_prefix = tmp_path / "output" / "run-templates"
+
+    exit_code = main(
+        [
+            "run",
+            "--query-file",
+            str(query_file),
+            "--query-template-file",
+            str(template_file),
+            "--blocklist-file",
+            str(blocklist),
+            "--provider",
+            "static-json",
+            "--provider-config",
+            str(provider_config),
+            "--domain-date-provider",
+            "noop",
+            "--output-prefix",
+            str(output_prefix),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_prefix.with_name("run-templates-01.csv").exists()
+    assert output_prefix.with_name("run-templates-02.csv").exists()

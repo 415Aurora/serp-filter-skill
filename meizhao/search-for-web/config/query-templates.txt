@@ -1,0 +1,4 @@
+intitle:"submit a tool" (AI OR "AI tool" OR "AI tools" OR LLM)
+"submit your AI tool" OR "submit your tool" "AI directory"
+"add your AI tool" "directory" OR "AI tools directory"
+"list your AI tool" "AI tools"

@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--query", help="Single Google query to execute.")
     run_parser.add_argument("--query-file", type=Path, help="Text file containing one query per line.")
+    run_parser.add_argument("--query-template-file", type=Path, help="Text file containing query templates.")
     run_parser.add_argument("--blocklist-file", type=Path, required=True)
     run_parser.add_argument("--sheet-name")
     run_parser.add_argument("--url-column", action="append", default=[])
@@ -55,7 +56,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command != "run":
         parser.error("Unsupported command")
 
-    queries = _load_queries(args.query, args.query_file)
+    queries = _load_queries(args.query, args.query_file, args.query_template_file)
     blocklist_config = BlocklistSourceConfig(
         path=args.blocklist_file,
         sheet_name=args.sheet_name,
@@ -85,12 +86,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def _load_queries(query: str | None, query_file: Path | None) -> list[str]:
+def _load_query_lines(path: Path | None) -> list[str]:
+    if not path:
+        return []
+    return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _load_queries(query: str | None, query_file: Path | None, template_file: Path | None) -> list[str]:
+    merged: list[str] = []
     if query:
-        return [query]
-    if query_file:
-        return [line.strip() for line in query_file.read_text(encoding="utf-8").splitlines() if line.strip()]
-    raise ValueError("Either --query or --query-file is required.")
+        merged.append(query)
+    merged.extend(_load_query_lines(query_file))
+    merged.extend(_load_query_lines(template_file))
+
+    if not merged:
+        raise ValueError("Either --query, --query-file, or --query-template-file is required.")
+
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in merged:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
 
 
 def _build_provider(args: argparse.Namespace) -> object:
