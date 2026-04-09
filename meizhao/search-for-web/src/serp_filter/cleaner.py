@@ -27,6 +27,10 @@ INPUT_FIELDNAMES = [
 
 REVIEW_FIELDNAMES = INPUT_FIELDNAMES + ["classification", "decision", "review_reason"]
 
+AI_SIGNALS = ["ai ", "ai-", "aitool", "artificial intelligence", "llm"]
+DIRECTORY_SIGNALS = ["directory", "catalog", "catalogue", "library", "database", "resource", "guide", "toolbox"]
+SUBMIT_SIGNALS = ["submit", "add", "list your tool", "tool-submit", "submit your tool"]
+
 
 @dataclass(slots=True)
 class CleanedRow:
@@ -83,23 +87,24 @@ def classify_row(row: dict[str, str]) -> CleanedRow:
     if any(token in haystack for token in ["docs.", "/docs/", "support.", "manual", "documentation", "help center", "help:", "tutorial", "learn.microsoft.com", "oracle help center"]):
         return CleanedRow(row=row, classification="product_doc", decision="drop", review_reason="product documentation or help page")
 
-    if any(token in haystack for token in ["submit a tool", "submit-tool", "/submit", "tool-submit", "toolbox submission", "submit your tool"]):
-        if any(token in haystack for token in ["directory", "catalog", "catalogue", "library", "database", "resource", "guide", "toolbox", "weekly", "tools"]):
-            decision = "keep" if any(token in haystack for token in ["ai ", "ai-", "aitool", "artificial intelligence"]) else "flag"
+    if any(token in haystack for token in SUBMIT_SIGNALS):
+        has_ai = any(token in haystack for token in AI_SIGNALS)
+        has_dir = any(token in haystack for token in DIRECTORY_SIGNALS)
+        if has_ai or has_dir:
             return CleanedRow(
                 row=row,
                 classification="submission_candidate",
-                decision=decision,
-                review_reason="submission-style page with catalog or directory signals",
+                decision="keep",
+                review_reason="submission page with ai/directory signal",
             )
         return CleanedRow(
             row=row,
             classification="submission_candidate",
             decision="flag",
-            review_reason="submission-style page without strong catalog signals",
+            review_reason="submission page without ai/directory signal",
         )
 
-    if any(token in haystack for token in ["catalogue", "catalog", "directory", "toolbox", "library", "database", "resource", "guide"]):
+    if any(token in haystack for token in DIRECTORY_SIGNALS):
         return CleanedRow(
             row=row,
             classification="catalog_or_resource_candidate",
