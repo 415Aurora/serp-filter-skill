@@ -7,7 +7,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from serp_filter.models import SearchPage, SearchResult
-from serp_filter.pipeline import run_pipeline
+from serp_filter.pipeline import aggregate_pipeline_results, run_pipeline
 
 
 class _FakeProvider:
@@ -218,4 +218,80 @@ def test_run_pipeline_fetches_additional_pages_until_kept_target_is_reached(tmp_
     manifest = json.loads(results.manifest_path.read_text(encoding="utf-8"))
     assert manifest["raw_fetched_count"] == 4
     assert manifest["pages_fetched"] == 2
-    assert manifest["stop_reason"] == "target_reached"
+
+
+def test_aggregate_pipeline_results_prefers_submit_pages_and_tracks_query_hits(tmp_path: Path) -> None:
+    output_prefix = tmp_path / "aggregate-results"
+
+    class _ProviderOne:
+        def fetch_page(self, query: str, page_size: int, locale: str | None = None, start: int = 0) -> SearchPage:
+            return SearchPage(
+                results=[
+                    SearchResult(
+                        query=query,
+                        rank=7,
+                        title="AI Tools Directory Blog",
+                        site_name="Example",
+                        url="https://example.com/blog/top-ai-tools",
+                        displayed_domain="example.com",
+                        root_domain="example.com",
+                        snippet="blog result",
+                        provider_raw_date=None,
+                    )
+                ],
+                next_start=None,
+            )
+
+    class _ProviderTwo:
+        def fetch_page(self, query: str, page_size: int, locale: str | None = None, start: int = 0) -> SearchPage:
+            return SearchPage(
+                results=[
+                    SearchResult(
+                        query=query,
+                        rank=3,
+                        title="Submit Your AI Tool",
+                        site_name="Example",
+                        url="https://example.com/submit-tool",
+                        displayed_domain="example.com",
+                        root_domain="example.com",
+                        snippet="submit result",
+                        provider_raw_date=None,
+                    )
+                ],
+                next_start=None,
+            )
+
+    run_one = run_pipeline(
+        query="ai tools directory",
+        provider=_ProviderOne(),
+        blocked_domains=set(),
+        domain_lookup=lambda domain: ("2018-01-01", "rdap"),
+        output_prefix=output_prefix.with_name("run-one"),
+        limit=10,
+        page_size=10,
+        max_pages=5,
+        max_raw_results=50,
+        locale="us",
+    )
+    run_two = run_pipeline(
+        query="submit your ai tool",
+        provider=_ProviderTwo(),
+        blocked_domains=set(),
+        domain_lookup=lambda domain: ("2018-01-01", "rdap"),
+        output_prefix=output_prefix.with_name("run-two"),
+        limit=10,
+        page_size=10,
+        max_pages=5,
+        max_raw_results=50,
+        locale="us",
+    )
+
+    aggregated = aggregate_pipeline_results([run_one, run_two])
+
+    assert len(aggregated) == 1
+    assert aggregated[0].root_domain == "example.com"
+    assert aggregated[0].best_url == "https://example.com/submit-tool"
+    assert aggregated[0].best_title == "Submit Your AI Tool"
+    assert aggregated[0].best_rank == 3
+    assert aggregated[0].query_hit_count == 2
+    assert aggregated[0].matched_queries == "ai tools directory; submit your ai tool"

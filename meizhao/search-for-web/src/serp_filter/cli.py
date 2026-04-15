@@ -8,9 +8,10 @@ from typing import Sequence
 from serp_filter.blocklist import BlocklistSourceConfig, load_blocked_domains
 from serp_filter.cleaner import classify_rows, load_results_file, write_clean_results
 from serp_filter.domain_dates import RdapDomainDateLookup
-from serp_filter.pipeline import run_pipeline
+from serp_filter.pipeline import aggregate_pipeline_results, run_pipeline
 from serp_filter.providers.serpapi import SerpApiProvider
 from serp_filter.providers.static_json import StaticJsonProvider
+from serp_filter.writers import write_merged_results
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -66,23 +67,31 @@ def main(argv: Sequence[str] | None = None) -> int:
     blocked_domains = load_blocked_domains(blocklist_config)
     provider = _build_provider(args)
     domain_lookup = _build_domain_lookup(args)
+    run_results = []
 
     for index, query in enumerate(queries, start=1):
         output_prefix = args.output_prefix
         if len(queries) > 1:
             output_prefix = args.output_prefix.parent / f"{args.output_prefix.name}-{index:02d}"
-        run_pipeline(
-            query=query,
-            provider=provider,
-            blocked_domains=blocked_domains,
-            domain_lookup=domain_lookup,
-            output_prefix=output_prefix,
-            limit=args.limit,
-            page_size=args.page_size,
-            max_pages=args.max_pages,
-            max_raw_results=args.max_raw_results,
-            locale=args.locale,
+        run_results.append(
+            run_pipeline(
+                query=query,
+                provider=provider,
+                blocked_domains=blocked_domains,
+                domain_lookup=domain_lookup,
+                output_prefix=output_prefix,
+                limit=args.limit,
+                page_size=args.page_size,
+                max_pages=args.max_pages,
+                max_raw_results=args.max_raw_results,
+                locale=args.locale,
+            )
         )
+
+    if len(run_results) > 1:
+        aggregated_results = aggregate_pipeline_results(run_results)
+        merged_output_prefix = args.output_prefix.parent / f"{args.output_prefix.name}-merged"
+        write_merged_results(aggregated_results, merged_output_prefix)
     return 0
 
 

@@ -1,4 +1,12 @@
 intitle:"submit a tool" (AI OR "AI tool" OR "AI tools" OR LLM)
-"submit your AI tool" OR "submit your tool" "AI directory"
-"add your AI tool" "directory" OR "AI tools directory"
-"list your AI tool" "AI tools"
+intitle:"submit your tool" ("AI directory" OR "AI tools directory")
+intitle:"add your tool" ("AI tools" OR "AI directory")
+"submit your AI tool" ("AI directory" OR "AI tools directory")
+"add your AI tool" ("directory" OR "tool directory")
+"list your tool" ("AI directory" OR "directory")
+"feature your AI tool" ("directory" OR "listing")
+"get listed" ("AI tools directory" OR "AI directory")
+"AI directory" "submit tool"
+"AI tools directory" "add tool"
+"submit startup" ("AI tools" OR "AI directory")
+"tool directory" "submit your tool"

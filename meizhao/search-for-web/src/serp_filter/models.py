@@ -35,6 +35,31 @@ class EnrichedResult(SearchResult):
 
 
 @dataclass(slots=True)
+class AggregatedResult:
+    query: str
+    rank: int
+    site_name: str
+    title: str
+    url: str
+    displayed_domain: str
+    root_domain: str
+    snippet: str
+    provider_raw_date: str | None
+    domain_created_at: str | None
+    domain_created_source: str
+    exclude_reason: str | None
+    status: str
+    best_rank: int
+    query_hit_count: int
+    matched_queries: str
+    best_url: str
+    best_title: str
+
+    def as_row(self) -> dict[str, str | int | None]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class PipelineRunResult:
     query: str
     target_kept_count: int

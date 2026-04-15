@@ -7,7 +7,8 @@
 - 按搜索指令抓取 Google 结果
 - 根据本地网站名单排除已经处理过的站点
 - 导出首轮候选结果到 `csv/xlsx`
-- 对首轮结果做第二轮规则清洗，保留更多候选并标记明显噪音
+- 在多 query 场景下自动汇总站点级结果，优先保留更强的提交页
+- 对首轮或汇总结果做第二轮质量清洗，按相关性和站点质量排序
 
 ## 目录结构
 
@@ -104,7 +105,9 @@ data_path = "private/provider-data/example-results.json"
 
 ### 3. Query 模板文件
 
-仓库内置了 `config/query-templates.txt`，用于 AI submit 场景的批量 query 模板。`run` 支持把模板文件和 `--query` / `--query-file` 合并后去重执行。
+仓库内置了 `config/query-templates.txt`，用于 AI submit 场景的批量 query 模板。模板分成“直接提交页”“目录提交页”“收录意图页”三类，默认偏向高质量提交站而不是泛博客/listicle。
+
+`run` 支持把模板文件和 `--query` / `--query-file` 合并后去重执行。
 
 示例：
 
@@ -137,7 +140,8 @@ url_columns = ["Submit Link"]
 - 按 query 抓 Google 结果
 - 排除 blocklist 中已出现的站点
 - 分页抓取直到达到目标保留数或触发抓取上限
-- 导出 `csv/xlsx/manifest`
+- 导出每条 query 的 `csv/xlsx/manifest`
+- 多 query 时额外生成一份站点级 `-merged.csv/.xlsx/.manifest.json`
 
 示例：
 
@@ -164,14 +168,15 @@ PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
 
 - `--limit` 表示目标保留结果数，不是单页抓取数。
 - `--page-size`、`--max-pages`、`--max-raw-results` 用于控制分页深度和成本。
+- 如果同时执行多条 query，建议后续优先对 `*-merged.csv` 跑 `clean`，因为它已经按 `root_domain` 聚合，并保留 `best_rank`、`query_hit_count`、`matched_queries` 等质量代理信号。
 
 ### 第二轮清洗：`clean`
 
 第二轮负责：
 
-- 读取第一轮输出的 `csv/xlsx`
-- 依据 URL、标题、摘要做规则分类
-- 产出更适合人工复核的候选结果
+- 读取第一轮输出的 `csv/xlsx`，或多 query 汇总后的 `*-merged.csv`
+- 依据 URL、标题、摘要、查询命中次数、域名年龄、SERP 排名做规则分类和质量打分
+- 产出按质量排序、适合人工复核的候选结果
 
 示例：
 
@@ -184,20 +189,27 @@ PYTHONPATH=src ../../.venv/bin/python -m serp_filter clean \
 
 `clean` 当前针对 AI submit 发现流程采用“strict keep + wide flag”策略：
 
-- `keep`：只保留高置信提交页（例如同时具备 submit + AI/directory 信号）。
-- `flag`：保留更宽口径的可疑候选，供人工复核。
-- `drop`：明显噪音（文档、论坛、视频、社交等）进入 review，不进入候选结果。
+- `keep`：提交意图明确，且具备更强的质量信号，例如更好的排名、多 query 命中、较老域名、清晰提交 URL。
+- `flag`：相关但仍需人工复核，例如高质量目录首页、弱提交信号页面。
+- `drop`：明显噪音（文档、论坛、视频、社交、隐私页、博客页、工具详情页、代提交服务页）进入 review，不进入候选结果。
 
 第二轮输出：
 
 - `*.csv`
-  保留 `keep` 和 `flag` 两类候选
+  保留 `keep` 和 `flag` 两类候选，并按 `decision -> final_score -> best_rank` 排序
 - `*.xlsx`
   和上面的候选结果一致
 - `*.review.csv`
-  包含全部记录、分类、决策和原因，适合复核
+  包含全部记录、分类、分数、信号摘要和原因，适合复核
 - `*.manifest.json`
-  包含输入数、输出数、各类决策统计
+  包含输入数、输出数、各类决策统计，以及结果排序信息
+
+`clean` 新增的关键字段：
+
+- `relevance_score`
+- `quality_score`
+- `final_score`
+- `signal_summary`
 
 ### 离线回放：`static-json`
 
@@ -226,7 +238,7 @@ PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
 示例：
 
 - `使用 $serp-filter-google-results 查询 intitle:"submit a tool" OR "add a tool"，排除我的名单文件，输出 50 条候选`
-- `用 serp-filter-google-results 先抓一轮 Google 结果，再做第二轮清洗`
+- `用 serp-filter-google-results 先抓一轮 Google 结果，再输出 merged 文件并做第二轮质量清洗`
 
 推荐在需求里明确：
 

@@ -1,6 +1,6 @@
 ---
 name: serp-filter-google-results
-description: Use when you need to fetch Google search results or clean first-pass SERP exports, exclude sites already present in a local website list, enrich with domain registration dates, and write reviewable spreadsheet outputs while keeping provider credentials and private input files isolated. Also use when the user wants an offline replay with `static-json` before using a real SerpApi key.
+description: Use when you need to fetch Google search results or clean first-pass SERP exports, exclude sites already present in a local website list, rank likely submission sites by quality signals such as query hit count and domain age, and write reviewable spreadsheet outputs while keeping provider credentials and private input files isolated. Also use when the user wants an offline replay with `static-json` before using a real SerpApi key.
 ---
 
 # Google 搜索结果筛选
@@ -92,6 +92,11 @@ PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
 
 如果用户没有明确说要离线回放，默认先判断是否具备 `serpapi` 真实抓取条件；如果没有 key，就主动切到 `static-json` 做验证，而不是卡住。
 
+如果用户要“更高质量的网站”而不是“更多候选”，默认做法是：
+1. 使用内置 `query-templates.txt` 跑多条高意图 query
+2. 优先使用自动生成的 `*-merged.csv` 作为第二轮 `clean` 输入
+3. 交付时按 `final_score` 最高的候选优先展示
+
 第一轮抓取：
 ```bash
 cd meizhao/search-for-web
@@ -120,7 +125,7 @@ PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
 ```bash
 cd meizhao/search-for-web
 PYTHONPATH=src ../../.venv/bin/python -m serp_filter clean \
-  --input-file output/google-serp-run.csv \
+  --input-file output/google-serp-run-merged.csv \
   --output-prefix output/google-serp-run-cleaned
 ```
 
@@ -165,7 +170,8 @@ PYTHONPATH=src ../../.venv/bin/python -m serp_filter clean \
 - 相同 URL 跨页不会重复写入结果。
 - `tldextract` 使用内置后缀表，不会为后缀解析额外联网。
 - `rdap` 查询可用 `--domain-delay` 控制节流；如果 `rdap.org` 超时或返回异常，任务不会失败，而是把该域名标成 `rdap_error`。
-- `clean` 子命令会根据 URL、标题、摘要做规则分类，采用“严格 keep + 宽口径 flag”策略：只有高置信 AI submit / directory 信号进入 `keep`，其余可疑候选尽量进入 `flag` 供人工复核，并在 review 文件中标出原因。
+- 多 query 运行时会自动额外生成 `*-merged.csv/.xlsx/.manifest.json`，按 `root_domain` 汇总并保留 `best_rank`、`query_hit_count`、`matched_queries` 等站点级质量信号。
+- `clean` 子命令会根据 URL、标题、摘要、SERP 排名、多 query 命中次数和域名年龄做规则分类与质量打分。默认策略仍是“严格 keep + 宽口径 flag”，但排序会优先更值得提交的站点。
 - 输出文件：
   - `*.csv`
   - `*.xlsx`
@@ -182,5 +188,6 @@ PYTHONPATH=src ../../.venv/bin/python -m serp_filter clean \
 ## Notes
 - “网站创建时间”当前实现为域名注册时间，不是站点真实上线时间。
 - `*.manifest.json` 会记录原始抓取数、抓取页数和停止原因，便于判断结果偏少是因为 Google 本身少、过滤过多，还是达到抓取上限。
-- 第二轮清洗面向 AI submit 站点，默认采用“strict keep + wide flag”：`keep` 控制更严格，`flag` 覆盖更广；明显的文档、论坛、视频和社交页面会被排除到 review 文件里。
+- 第二轮清洗面向 AI submit 站点，默认采用“strict keep + wide flag”：`keep` 控制更严格，`flag` 覆盖更广；明显的文档、论坛、视频、隐私页、博客页、工具详情页和代提交服务页会被排除到 review 文件里。
+- `clean` 输出会新增 `relevance_score`、`quality_score`、`final_score`、`signal_summary` 字段，供人工复核时快速判断候选质量。
 - 如果名单文件列名不固定，优先用 `--url-column`/`--domain-column` 明确指定；不指定时会自动扫描 `url/link/site/domain/website/submit` 相关列。

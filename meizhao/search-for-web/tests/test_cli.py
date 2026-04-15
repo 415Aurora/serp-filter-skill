@@ -104,6 +104,11 @@ def test_cli_clean_writes_candidate_results_and_review_outputs(tmp_path: Path) -
                 "domain_created_source",
                 "exclude_reason",
                 "status",
+                "best_rank",
+                "query_hit_count",
+                "matched_queries",
+                "best_url",
+                "best_title",
             ],
         )
         writer.writeheader()
@@ -118,7 +123,14 @@ def test_cli_clean_writes_candidate_results_and_review_outputs(tmp_path: Path) -
                     "displayed_domain": "aiproventools.com",
                     "root_domain": "aiproventools.com",
                     "snippet": "Submit your AI tool to our directory",
+                    "domain_created_at": "2018-01-01",
+                    "domain_created_source": "rdap",
                     "status": "kept",
+                    "best_rank": 1,
+                    "query_hit_count": 2,
+                    "matched_queries": "submit a tool; ai tools directory",
+                    "best_url": "https://aiproventools.com/submit-a-tool/",
+                    "best_title": "Submit A Tool - AI ProvenTools",
                 },
                 {
                     "query": "submit a tool",
@@ -130,17 +142,29 @@ def test_cli_clean_writes_candidate_results_and_review_outputs(tmp_path: Path) -
                     "root_domain": "servicenow.com",
                     "snippet": "Select the skill you want to add a tool to",
                     "status": "kept",
+                    "best_rank": 2,
+                    "query_hit_count": 1,
+                    "matched_queries": "submit a tool",
+                    "best_url": "https://www.servicenow.com/docs/r/intelligent-experiences/now-assist-skill-kit/add-a-tool.html",
+                    "best_title": "Add a tool",
                 },
                 {
                     "query": "submit a tool",
-                    "rank": 3,
-                    "site_name": "Web Tools Weekly",
-                    "title": "Submit a Tool to Web Tools Weekly",
-                    "url": "https://webtoolsweekly.com/submit",
+                    "rank": 6,
+                    "site_name": "General AI Directory",
+                    "title": "AI Tools Directory",
+                    "url": "https://webtoolsweekly.com/",
                     "displayed_domain": "webtoolsweekly.com",
                     "root_domain": "webtoolsweekly.com",
-                    "snippet": "Submit libraries, frameworks, web apps and APIs",
+                    "snippet": "Discover the best AI tools in our directory",
+                    "domain_created_at": "2016-01-01",
+                    "domain_created_source": "rdap",
                     "status": "kept",
+                    "best_rank": 6,
+                    "query_hit_count": 2,
+                    "matched_queries": "submit a tool; ai tools directory",
+                    "best_url": "https://webtoolsweekly.com/",
+                    "best_title": "AI Tools Directory",
                 },
             ]
         )
@@ -165,7 +189,7 @@ def test_cli_clean_writes_candidate_results_and_review_outputs(tmp_path: Path) -
 
     cleaned_rows = output_prefix.with_suffix(".csv").read_text(encoding="utf-8")
     assert "aiproventools.com/submit-a-tool/" in cleaned_rows
-    assert "webtoolsweekly.com/submit" in cleaned_rows
+    assert "webtoolsweekly.com/" in cleaned_rows
     assert "servicenow.com/docs/" not in cleaned_rows
 
     review_rows = output_prefix.with_name(f"{output_prefix.name}.review.csv").read_text(encoding="utf-8")
@@ -175,7 +199,15 @@ def test_cli_clean_writes_candidate_results_and_review_outputs(tmp_path: Path) -
 
     workbook = load_workbook(output_prefix.with_suffix(".xlsx"), read_only=True, data_only=True)
     values = list(workbook["results"].iter_rows(values_only=True))
-    assert values[0][-3:] == ("classification", "decision", "review_reason")
+    assert values[0][-7:] == (
+        "classification",
+        "decision",
+        "review_reason",
+        "relevance_score",
+        "quality_score",
+        "final_score",
+        "signal_summary",
+    )
 
     manifest = json.loads(output_prefix.with_name(f"{output_prefix.name}.manifest.json").read_text(encoding="utf-8"))
     assert manifest["input_count"] == 3
@@ -264,3 +296,10 @@ def test_cli_run_with_query_template_file_merges_queries(tmp_path: Path) -> None
     assert exit_code == 0
     assert output_prefix.with_name("run-templates-01.csv").exists()
     assert output_prefix.with_name("run-templates-02.csv").exists()
+    assert output_prefix.with_name("run-templates-merged.csv").exists()
+    assert output_prefix.with_name("run-templates-merged.xlsx").exists()
+
+    merged_rows = list(csv.DictReader(output_prefix.with_name("run-templates-merged.csv").open(encoding="utf-8")))
+    assert len(merged_rows) == 2
+    assert "best_rank" in merged_rows[0]
+    assert "query_hit_count" in merged_rows[0]

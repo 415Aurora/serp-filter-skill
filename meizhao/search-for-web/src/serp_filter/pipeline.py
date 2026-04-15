@@ -3,12 +3,29 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlparse
 
-from serp_filter.models import EnrichedResult, PipelineRunResult, SearchResult
+from serp_filter.models import AggregatedResult, EnrichedResult, PipelineRunResult, SearchResult
 from serp_filter.writers import write_results
 
 
 DomainLookup = Callable[[str], tuple[str | None, str]]
+
+
+def _representative_result_priority(result: EnrichedResult) -> tuple[int, int, int, int, int]:
+    url = result.url.lower()
+    title = result.title.lower()
+    path = urlparse(result.url).path
+    submit_signal = any(token in url or token in title for token in ["/submit", "submit", "add-tool", "list-your-tool"])
+    no_query_string = 0 if "?" in result.url else 1
+    path_depth = len([part for part in path.split("/") if part])
+    return (
+        1 if submit_signal else 0,
+        no_query_string,
+        -min(path_depth, 20),
+        -result.rank,
+        -len(result.url),
+    )
 
 
 def run_pipeline(
@@ -101,3 +118,40 @@ def run_pipeline(
         xlsx_path=xlsx_path,
         manifest_path=manifest_path,
     )
+
+
+def aggregate_pipeline_results(run_results: list[PipelineRunResult]) -> list[AggregatedResult]:
+    grouped: dict[str, list[EnrichedResult]] = {}
+    for run in run_results:
+        for result in run.kept_results:
+            grouped.setdefault(result.root_domain, []).append(result)
+
+    aggregated: list[AggregatedResult] = []
+    for root_domain, results in grouped.items():
+        representative = max(results, key=_representative_result_priority)
+        matched_queries: list[str] = []
+        seen_queries: set[str] = set()
+        for result in results:
+            if result.query in seen_queries:
+                continue
+            seen_queries.add(result.query)
+            matched_queries.append(result.query)
+        aggregated.append(
+            AggregatedResult(
+                **asdict(representative),
+                best_rank=min(result.rank for result in results),
+                query_hit_count=len(matched_queries),
+                matched_queries="; ".join(matched_queries),
+                best_url=representative.url,
+                best_title=representative.title,
+            )
+        )
+
+    aggregated.sort(
+        key=lambda row: (
+            -row.query_hit_count,
+            row.best_rank,
+            row.root_domain,
+        )
+    )
+    return aggregated
