@@ -1,312 +1,81 @@
 # Google SERP Filter Skill
 
-这个目录包含一个可在 Codex、Claude Code 等平台中使用的 skill，以及支撑它运行的本地 Python 实现。
+这个项目继续作为 `search-for-web` 的代码执行引擎使用，但业务输入和结果输出已统一接入 `meizhao/database` 资产库。
 
-它的目标是把 Google 搜索结果筛成可复核的候选站点列表，适合下面这类工作：
+## 当前职责
 
-- 按搜索指令抓取 Google 结果
-- 根据本地网站名单排除已经处理过的站点
-- 导出首轮候选结果到 `csv/xlsx`
-- 在多 query 场景下自动汇总站点级结果，优先保留更强的提交页
-- 对首轮或汇总结果做第二轮质量清洗，按相关性和站点质量排序
+- 代码与逻辑：保留在本项目目录
+- provider 凭据：默认保留在 `private/providers.toml`
+- 示例配置：保留在 `config/`
+- 历史 `output/`：视为 legacy 调试输出，不再作为正式业务结果目录
 
-## 目录结构
+## Canonical 业务路径
 
-- `serp-filter-skill/`
-  AI skill 包本体，包含 `SKILL.md`、`agents/openai.yaml` 和参考文档。
-- `src/serp_filter/`
-  skill 背后的本地 Python 实现。
-- `config/`
-  示例配置（包含 `providers.example.toml`、`blocklist.example.toml`、`query-templates.txt`）。
-- `private/`
-  私有输入和私有配置，不应该提交真实凭据。
-- `output/`
-  默认输出目录。
+- 共享 blocklist：
+  - `/Users/seven/workspace/meizhao/database/02_raw_exports/submission_lists/_shared/blocklists/ai-tool-submit-260327.xlsx`
+- ZeroGPT Plus 默认 query 集：
+  - `/Users/seven/workspace/meizhao/database/02_raw_exports/submission_lists/zerogpt.plus/query_sets/default_queries.txt`
+- ZeroGPT Plus 运行结果：
+  - `/Users/seven/workspace/meizhao/database/02_raw_exports/submission_lists/zerogpt.plus/search_for_web/runs/{run_id}/run/`
+- ZeroGPT Plus 清洗结果：
+  - `/Users/seven/workspace/meizhao/database/02_raw_exports/submission_lists/zerogpt.plus/search_for_web/runs/{run_id}/clean/`
 
-## Skill 名称
+## 推荐运行方式
 
-- Skill 名称：`serp-filter-google-results`
-- Codex UI 元数据：`serp-filter-skill/agents/openai.yaml`
+优先通过资产库入口脚本运行，而不是手动把业务文件放进本项目的 `private/` 或 `output/`。
 
-## 在 Codex 中配置
+第一轮抓取：
 
-推荐做法是把 `serp-filter-skill/` 作为一个独立 skill 目录链接到 `~/.codex/skills/` 下。
+```bash
+python3 /Users/seven/workspace/meizhao/scripts/run_search_for_web_asset.py run \
+  --product-slug zerogpt.plus \
+  --run-id 2026-04-16_google-serp_ai-submit_v01 \
+  --provider serpapi
+```
+
+第二轮清洗：
+
+```bash
+python3 /Users/seven/workspace/meizhao/scripts/run_search_for_web_asset.py clean \
+  --product-slug zerogpt.plus \
+  --run-id 2026-04-16_google-serp_ai-submit_v01
+```
+
+## 低层命令
+
+如果需要直接调试底层 CLI，仍可在本项目目录运行 `python -m serp_filter`。只是默认业务文件应来自资产库路径。
 
 示例：
 
 ```bash
-mkdir -p ~/.codex/skills
-ln -s /absolute/path/to/search-for-web/serp-filter-skill \
-  ~/.codex/skills/serp-filter-google-results
-```
-
-如果之前已经存在同名目录或链接，先删除旧的，再重新创建。
-
-配置完成后：
-
-1. 重启 Codex 会话
-2. 确认新会话能识别 `serp-filter-google-results`
-3. 在对话里使用 `$serp-filter-google-results` 触发
-
-说明：
-
-- 已经启动的旧会话通常不会自动刷新技能列表。
-- `agents/openai.yaml` 用于 Codex 的技能列表和默认提示词展示。
-
-## 在 Claude Code 中配置
-
-Claude Code 一般从 `~/.claude/skills/` 读取 skill。
-
-示例：
-
-```bash
-mkdir -p ~/.claude/skills
-ln -s /absolute/path/to/search-for-web/serp-filter-skill \
-  ~/.claude/skills/serp-filter-google-results
-```
-
-如果你不想用软链接，也可以直接复制整个 `serp-filter-skill/` 目录。
-
-配置完成后建议重新打开 Claude Code 会话，再通过技能名称或自然语言任务触发。
-
-## 本地运行前准备
-
-### 1. Python 环境
-
-在项目目录执行：
-
-```bash
-cd meizhao/search-for-web
-python3 -m venv ../../.venv
-../../.venv/bin/pip install -e ".[dev]"
-```
-
-如果仓库里已经有可复用的虚拟环境，可以直接使用现有环境。
-
-### 2. Provider 配置
-
-复制示例配置：
-
-```bash
-cp config/providers.example.toml private/providers.toml
-```
-
-编辑 `private/providers.toml`：
-
-```toml
-[serpapi]
-api_key = "replace-with-your-serpapi-key"
-
-[static_json]
-data_path = "private/provider-data/example-results.json"
-```
-
-如果只做离线验证，可以只保留 `[static_json]`。
-
-### 3. Query 模板文件
-
-仓库内置了 `config/query-templates.txt`，用于 AI submit 场景的批量 query 模板。模板分成“直接提交页”“目录提交页”“收录意图页”三类，默认偏向高质量提交站而不是泛博客/listicle。
-
-`run` 支持把模板文件和 `--query` / `--query-file` 合并后去重执行。
-
-示例：
-
-```bash
-cd meizhao/search-for-web
-PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
+cd /Users/seven/workspace/.worktrees/feature-search-for-web-skill/meizhao/search-for-web
+PYTHONPATH=src /Users/seven/workspace/.venv/bin/python -m serp_filter run \
+  --query-file /Users/seven/workspace/meizhao/database/02_raw_exports/submission_lists/zerogpt.plus/query_sets/default_queries.txt \
   --query-template-file config/query-templates.txt \
-  --blocklist-file private/blocklists/ai-tool-submit-260327.xlsx \
-  --provider static-json \
-  --provider-config private/providers.toml \
-  --output-prefix output/google-serp-template-replay
-```
-
-### 4. Blocklist 文件
-
-示例参考：
-
-```toml
-path = "private/blocklists/ai-tool-submit-260327.xlsx"
-sheet_name = "AI提交"
-url_columns = ["Submit Link"]
-```
-
-## 使用方式
-
-### 第一轮抓取：`run`
-
-第一轮负责：
-
-- 按 query 抓 Google 结果
-- 排除 blocklist 中已出现的站点
-- 分页抓取直到达到目标保留数或触发抓取上限
-- 导出每条 query 的 `csv/xlsx/manifest`
-- 多 query 时额外生成一份站点级 `-merged.csv/.xlsx/.manifest.json`
-
-示例：
-
-```bash
-cd meizhao/search-for-web
-PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
-  --query-file private/queries.txt \
-  --query-template-file config/query-templates.txt \
-  --blocklist-file private/blocklists/ai-tool-submit-260327.xlsx \
-  --sheet-name "AI提交" \
-  --url-column "Submit Link" \
+  --blocklist-file /Users/seven/workspace/meizhao/database/02_raw_exports/submission_lists/_shared/blocklists/ai-tool-submit-260327.xlsx \
   --provider serpapi \
   --provider-config private/providers.toml \
-  --output-prefix output/google-serp-run \
-  --limit 50 \
-  --page-size 10 \
-  --max-pages 10 \
-  --max-raw-results 100 \
-  --domain-date-provider rdap \
-  --domain-delay 1.0
+  --output-prefix /Users/seven/workspace/meizhao/database/02_raw_exports/submission_lists/zerogpt.plus/search_for_web/runs/2026-04-16_google-serp_ai-submit_v01/run/2026-04-16_google-serp_ai-submit_v01
 ```
 
-说明：
+## 输出约定
 
-- `--limit` 表示目标保留结果数，不是单页抓取数。
-- `--page-size`、`--max-pages`、`--max-raw-results` 用于控制分页深度和成本。
-- 如果同时执行多条 query，建议后续优先对 `*-merged.csv` 跑 `clean`，因为它已经按 `root_domain` 聚合，并保留 `best_rank`、`query_hit_count`、`matched_queries` 等质量代理信号。
+- `run/` 目录保留第一轮结果：
+  - `*.csv`
+  - `*.xlsx`
+  - `*.manifest.json`
+  - 多 query 时的 `*-merged.*`
+- `clean/` 目录保留第二轮结果：
+  - `*.csv`
+  - `*.xlsx`
+  - `*.review.csv`
+  - `*.manifest.json`
+- `asset_manifest.json` 写在每个 `run_id` 根目录，用于记录该次运行的输入、命令和生成文件。
 
-### 第二轮清洗：`clean`
+## 注意事项
 
-第二轮负责：
-
-- 读取第一轮输出的 `csv/xlsx`，或多 query 汇总后的 `*-merged.csv`
-- 依据 URL、标题、摘要、查询命中次数、域名年龄、SERP 排名做规则分类和质量打分
-- 产出按质量排序、适合人工复核的候选结果
-
-示例：
-
-```bash
-cd meizhao/search-for-web
-PYTHONPATH=src ../../.venv/bin/python -m serp_filter clean \
-  --input-file output/google-serp-run.csv \
-  --output-prefix output/google-serp-run-cleaned
-```
-
-`clean` 当前针对 AI submit 发现流程采用“strict keep + wide flag”策略：
-
-- `keep`：提交意图明确，且具备更强的质量信号，例如更好的排名、多 query 命中、较老域名、清晰提交 URL。
-- `flag`：相关但仍需人工复核，例如高质量目录首页、弱提交信号页面。
-- `drop`：明显噪音（文档、论坛、视频、社交、隐私页、博客页、工具详情页、代提交服务页）进入 review，不进入候选结果。
-
-第二轮输出：
-
-- `*.csv`
-  保留 `keep` 和 `flag` 两类候选，并按 `decision -> final_score -> best_rank` 排序
-- `*.xlsx`
-  和上面的候选结果一致
-- `*.review.csv`
-  包含全部记录、分类、分数、信号摘要和原因，适合复核
-- `*.manifest.json`
-  包含输入数、输出数、各类决策统计，以及结果排序信息
-
-`clean` 新增的关键字段：
-
-- `relevance_score`
-- `quality_score`
-- `final_score`
-- `signal_summary`
-
-### 离线回放：`static-json`
-
-适合测试和本地调试：
-
-```bash
-cd meizhao/search-for-web
-PYTHONPATH=src ../../.venv/bin/python -m serp_filter run \
-  --query-file private/queries.txt \
-  --query-template-file config/query-templates.txt \
-  --blocklist-file private/blocklists/ai-tool-submit-260327.xlsx \
-  --provider static-json \
-  --provider-config private/providers.toml \
-  --output-prefix output/google-serp-replay \
-  --limit 20 \
-  --page-size 10 \
-  --max-pages 10 \
-  --max-raw-results 100 \
-  --domain-date-provider noop
-```
-
-## 在 Codex / Claude Code 中如何提需求
-
-可以直接用自然语言，也可以显式提 skill 名称。
-
-示例：
-
-- `使用 $serp-filter-google-results 查询 intitle:"submit a tool" OR "add a tool"，排除我的名单文件，输出 50 条候选`
-- `用 serp-filter-google-results 先抓一轮 Google 结果，再输出 merged 文件并做第二轮质量清洗`
-
-推荐在需求里明确：
-
-- 查询语句
-- blocklist 文件路径
-- sheet 名
-- URL 列名 / 域名列名
-- 目标保留数
-- 输出目录
-
-## 常见问题
-
-### 1. 为什么提示缺少 `SerpApi` key
-
-真实 Google 查询依赖 `serpapi`。
-
-如果报错类似：
-
-```text
---provider-key is required for serpapi provider
-```
-
-说明以下两种方式都没有提供 key：
-
-- `--provider-key`
-- `private/providers.toml` 里的 `[serpapi].api_key`
-
-### 2. 为什么之前测试不需要 `SerpApi`
-
-因为测试分两类：
-
-- 单元测试：用 fake session / fake response，不会联网
-- 离线 CLI 测试：用 `static-json`，数据来自本地 JSON 文件
-
-### 3. RDAP 超时会不会导致整次任务失败
-
-当前版本不会。
-
-如果 `rdap.org` 超时或返回异常，域名创建时间会降级为：
-
-- `domain_created_at = None`
-- `domain_created_source = rdap_error`
-
-抓取和导出会继续完成。
-
-### 4. 为什么新装的 skill 在当前 Codex 会话里看不到
-
-通常是因为技能列表在会话启动时已缓存。
-
-处理方式：
-
-1. 确认 `~/.codex/skills/serp-filter-google-results` 已正确链接到 `serp-filter-skill/`
-2. 重启 Codex 会话
-3. 在新会话里重新查看技能列表
-
-## 验证
-
-项目测试：
-
-```bash
-cd meizhao/search-for-web
-../../.venv/bin/python -m pytest -q
-```
-
-当前主流程覆盖：
-
-- blocklist 读取
-- `SerpApi` 分页抓取
-- pipeline 抓取与导出
-- RDAP 失败降级
-- `clean` 子命令输出
+- `private/providers.toml` 仍是默认凭据位置，不迁入数据库。
+- 产品级 query 文件、共享 blocklist、正式结果文件一律以 `database/` 下的 canonical 路径为准。
+- 如果要扩展到新产品，复用同一目录模板：
+  - `database/02_raw_exports/submission_lists/{product_slug}/query_sets/`
+  - `database/02_raw_exports/submission_lists/{product_slug}/search_for_web/runs/`
